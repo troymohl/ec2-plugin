@@ -46,7 +46,10 @@ import hudson.model.Node;
 import hudson.model.labels.LabelAtom;
 import hudson.plugins.ec2.util.AmazonEC2Factory;
 import hudson.slaves.Cloud;
+import hudson.slaves.DumbSlave;
 import hudson.slaves.NodeProvisioner.PlannedNode;
+import hudson.slaves.OfflineCause;
+import hudson.slaves.SlaveComputer;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
 import java.io.IOException;
@@ -259,6 +262,7 @@ public class AmazonEC2Cloud extends EC2Cloud {
 
                             InstanceStateName state = InstanceStateName.fromValue(instance.getState().getName());
                             if (state.equals(InstanceStateName.Running)) {
+                                setNodeOnline(node,true);
                                 long startTime = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - instance.getLaunchTime().getTime());
                                 LOGGER.log(Level.INFO, "{0} moved to RUNNING state in {1} seconds and is ready to be connected by Jenkins", new Object[] {
                                         instanceId, startTime });
@@ -298,6 +302,7 @@ public class AmazonEC2Cloud extends EC2Cloud {
                 StopInstancesRequest request = new StopInstancesRequest();
                 request.setInstanceIds( Collections.singletonList( instanceId ) );
                 connect().stopInstances( request );
+                setNodeOnline( node,  false );
                 LOGGER.log( Level.INFO, "Stopped instance: {0}", instanceId );
             } catch ( Exception e ) {
                 LOGGER.log( Level.INFO, "Unable to stop instance: " + instanceId, e );
@@ -378,6 +383,20 @@ public class AmazonEC2Cloud extends EC2Cloud {
         }
 
         return boolValue;
+    }
+
+    private void setNodeOnline(Node node, boolean online) {
+        if (node instanceof DumbSlave ) {
+            DumbSlave dumbSlave = (DumbSlave)node;
+            SlaveComputer computer = dumbSlave.getComputer();
+            if (computer != null) {
+                OfflineCause message = OfflineCause.create( Messages._EC2InstanceControl_Stop() );
+                if (online) {
+                    message = OfflineCause.create( Messages._EC2InstanceControl_Start() );
+                }
+                computer.setTemporarilyOffline( !online, message );
+            }
+        }
     }
 
     @Extension
