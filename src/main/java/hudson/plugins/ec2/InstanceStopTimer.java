@@ -4,8 +4,9 @@ import com.google.common.annotations.VisibleForTesting;
 import hudson.Extension;
 import hudson.model.AsyncPeriodicWork;
 import hudson.model.Computer;
-import hudson.model.Executor;
+import hudson.model.Label;
 import hudson.model.Node;
+import hudson.model.Queue;
 import hudson.model.TaskListener;
 import hudson.slaves.Cloud;
 import java.io.IOException;
@@ -43,32 +44,26 @@ public class InstanceStopTimer extends AsyncPeriodicWork {
     }
 
     private boolean shouldStopNode(Node node) {
-        long maxIdleMillis = getMaxIdleMillis();
-
-        if (maxIdleMillis < 0) {
+        if (!isStartStopNodes() || node == null) {
             return false;
         }
-        boolean shouldStopNode = false;
+
         Computer computer = getComputer(node);
-        if (computer != null && computer.isOnline() && !computer.isConnecting()) {
-            boolean executorWasUsed = false;
-            for (Executor executor : computer.getAllExecutors()) {
-                if (executor.isIdle()) {
-                    long idleStart = executor.getIdleStartMilliseconds();
-                    long idleTime = System.currentTimeMillis() - idleStart;
-                    LOGGER.log(Level.FINEST, "{0} executor: {1} has been idle for: {2}", new Object[] {node.getNodeName() ,executor.getDisplayName(), idleTime});
-                    if (idleTime < maxIdleMillis) {
-                        executorWasUsed = true;
+        if (computer != null && !computer.isConnecting() && computer.isOffline()) {
+            boolean foundPendingJobForNode = false;
+            Queue.Item[] items = getItems();
+            for (Queue.Item item : items) {
+                Label itemLabel = item.getAssignedLabel();
+                if (itemLabel != null) {
+                    if(itemLabel.matches(node)) {
+                        foundPendingJobForNode = true;
                         break;
                     }
-                } else {
-                    executorWasUsed = true;
-                    break;
                 }
             }
-            shouldStopNode = !executorWasUsed;
+            return !foundPendingJobForNode;
         }
-        return shouldStopNode;
+        return false;
     }
 
     private void stopNode(Node node) {
@@ -89,40 +84,28 @@ public class InstanceStopTimer extends AsyncPeriodicWork {
         }
     }
 
-    private long getMaxIdleMillis() {
-        long maxMinutes = STOP_DISABLED;
+    private boolean isStartStopNodes() {
         Jenkins jenkinsInstance = Jenkins.get();
         for (Cloud cloud : jenkinsInstance.clouds) {
             if (!(cloud instanceof AmazonEC2Cloud))
                 continue;
             AmazonEC2Cloud ec2 = (AmazonEC2Cloud) cloud;
-            if (ec2.isStartStopNodes()) {
-                Integer configuredMax = getInteger(ec2.getMaxIdleMinutes());
-                if (configuredMax != null) {
-                    maxMinutes = Math.max(maxMinutes, configuredMax);
-                }
-            }
+            return ec2.isStartStopNodes();
         }
-        if (maxMinutes > 0) {
-            return TimeUnit.MINUTES.toMillis(maxMinutes);
-        }
-        return maxMinutes;
-    }
-
-    private Integer getInteger(String str) {
-        if (str != null) {
-            try {
-                return Integer.parseInt(str);
-            } catch (NumberFormatException nfe) {
-                LOGGER.log(Level.INFO, "Couldn't get integer from string: {0}", str);
-                return null;
-            }
-        }
-        return null;
+        return false;
     }
 
     @VisibleForTesting
     protected Computer getComputer(Node node) {
         return node.toComputer();
+    }
+
+    @VisibleForTesting
+    protected Queue.Item[] getItems() {
+        Queue queue = Jenkins.get().getQueue();
+        if (queue != null) {
+            return queue.getItems();
+        }
+        return new Queue.Item[0];
     }
 }

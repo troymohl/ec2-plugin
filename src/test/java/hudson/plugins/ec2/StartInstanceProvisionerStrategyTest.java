@@ -74,7 +74,6 @@ public class StartInstanceProvisionerStrategyTest {
     private AmazonEC2Cloud getMockCloud() {
         AmazonEC2Cloud cloud = mock(AmazonEC2Cloud.class);
         when(cloud.isStartStopNodes()).thenReturn(true);
-        when(cloud.getMaxIdleMinutes()).thenReturn("2");
         when(cloud.isEc2Node(any())).thenReturn(true);
         return cloud;
     }

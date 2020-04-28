@@ -64,9 +64,6 @@ THE SOFTWARE.
     <f:entry title="${%Prevent Stop EC2 Instance Tag}" field="preventStopAwsTag">
       <f:textbox default="prevent_stop"/>
     </f:entry>
-    <f:entry title="${%Max minutes instance idle}" field="maxIdleMinutes">
-      <f:textbox default="15" />
-    </f:entry>
   </f:advanced>
   <f:validateButton title="${%Test Connection}" progress="${%Testing...}" method="testConnection" with="region,useInstanceProfileForCredentials,credentialsId,privateKey,roleArn,roleSessionName" />
 </j:jelly>

@@ -224,15 +224,6 @@ public class AmazonEC2Cloud extends EC2Cloud {
         return false;
     }
 
-    public String getMaxIdleMinutes() {
-        return maxIdleMinutes;
-    }
-
-    @DataBoundSetter
-    public void setMaxIdleMinutes(String maxIdleMinutes) {
-        this.maxIdleMinutes = maxIdleMinutes;
-    }
-
     public PlannedNode startNode(Node node) {
         Instance nodeInstance = getInstanceByLabel(node.getSelfLabel().getExpression(), InstanceStateName.Stopped);
         if (nodeInstance == null) {
@@ -262,7 +253,6 @@ public class AmazonEC2Cloud extends EC2Cloud {
 
                             InstanceStateName state = InstanceStateName.fromValue(instance.getState().getName());
                             if (state.equals(InstanceStateName.Running)) {
-                                setNodeOnline(node,true);
                                 long startTime = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - instance.getLaunchTime().getTime());
                                 LOGGER.log(Level.INFO, "{0} moved to RUNNING state in {1} seconds and is ready to be connected by Jenkins", new Object[] {
                                         instanceId, startTime });
@@ -302,7 +292,6 @@ public class AmazonEC2Cloud extends EC2Cloud {
                 StopInstancesRequest request = new StopInstancesRequest();
                 request.setInstanceIds( Collections.singletonList( instanceId ) );
                 connect().stopInstances( request );
-                setNodeOnline( node,  false );
                 LOGGER.log( Level.INFO, "Stopped instance: {0}", instanceId );
             } catch ( Exception e ) {
                 LOGGER.log( Level.INFO, "Unable to stop instance: " + instanceId, e );
@@ -383,20 +372,6 @@ public class AmazonEC2Cloud extends EC2Cloud {
         }
 
         return boolValue;
-    }
-
-    private void setNodeOnline(Node node, boolean online) {
-        if (node instanceof DumbSlave ) {
-            DumbSlave dumbSlave = (DumbSlave)node;
-            SlaveComputer computer = dumbSlave.getComputer();
-            if (computer != null) {
-                OfflineCause message = OfflineCause.create( Messages._EC2InstanceControl_Stop() );
-                if (online) {
-                    message = OfflineCause.create( Messages._EC2InstanceControl_Start() );
-                }
-                computer.setTemporarilyOffline( !online, message );
-            }
-        }
     }
 
     @Extension
